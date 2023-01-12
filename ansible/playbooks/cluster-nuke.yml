@@ -2,6 +2,7 @@
 - hosts:
     - master
     - worker
+    - gpu
   become: true
   gather_facts: true
   any_errors_fatal: true

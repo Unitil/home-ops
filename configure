@@ -316,10 +316,15 @@ verify_ansible_hosts() {
     local node_hostname=
     local default_control_node_prefix=
     local default_worker_node_prefix=
+    local default_gpu_node_prefix=
+
     default_control_node_prefix="BOOTSTRAP_ANSIBLE_DEFAULT_CONTROL_NODE_HOSTNAME_PREFIX"
     default_worker_node_prefix="BOOTSTRAP_ANSIBLE_DEFAULT_NODE_HOSTNAME_PREFIX"
+    default_gpu_node_prefix="BOOTSTRAP_ANSIBLE_DEFAULT_GPU_HOSTNAME_PREFIX"
     _has_optional_envar "${default_control_node_prefix}"
     _has_optional_envar "${default_worker_node_prefix}"
+    _has_optional_envar "${default_gpu_node_prefix}"
+
     for var in "${!BOOTSTRAP_ANSIBLE_HOST_ADDR_@}"; do
         node_id=$(echo "${var}" | awk -F"_" '{print $5}')
         node_addr="BOOTSTRAP_ANSIBLE_HOST_ADDR_${node_id}"
@@ -371,14 +376,24 @@ generate_ansible_host_secrets() {
     local node_control=
     default_control_node_prefix=${BOOTSTRAP_ANSIBLE_DEFAULT_CONTROL_NODE_HOSTNAME_PREFIX:-k8s-}
     default_worker_node_prefix=${BOOTSTRAP_ANSIBLE_DEFAULT_NODE_HOSTNAME_PREFIX:-k8s-}
+    default_gpu_node_prefix=${BOOTSTRAP_ANSIBLE_DEFAULT_GPU_HOSTNAME_PREFIX:-k8s-}
     for var in "${!BOOTSTRAP_ANSIBLE_HOST_ADDR_@}"; do
         node_id=$(echo "${var}" | awk -F"_" '{print $5}')
         node_control="BOOTSTRAP_ANSIBLE_CONTROL_NODE_${node_id}"
+        node_gpu="BOOTSTRAP_ANSIBLE_GPU_NODE_${node_id}"
         if [[ "${!node_control}" == "true" ]]; then
             node_hostname="BOOTSTRAP_ANSIBLE_HOSTNAME_${node_id}"
             host_key="${!node_hostname:-${default_control_node_prefix}}"
             if [ "${host_key}" == "${default_control_node_prefix}" ]; then
                 node_hostname=${default_control_node_prefix}${node_id}
+            else
+                node_hostname=${!node_hostname}
+            fi
+        elif [[ "${!node_gpu}" == "true" ]]; then
+            node_hostname="BOOTSTRAP_ANSIBLE_HOSTNAME_${node_id}"
+            host_key="${!node_hostname:-${default_gpu_node_prefix}}"
+            if [ "${host_key}" == "${default_gpu_node_prefix}" ]; then
+                node_hostname=${default_gpu_node_prefix}${node_id}
             else
                 node_hostname=${!node_hostname}
             fi
@@ -406,6 +421,7 @@ generate_ansible_hosts() {
     local worker_node_count=
     default_control_node_prefix=${BOOTSTRAP_ANSIBLE_DEFAULT_CONTROL_NODE_HOSTNAME_PREFIX:-k8s-}
     default_worker_node_prefix=${BOOTSTRAP_ANSIBLE_DEFAULT_NODE_HOSTNAME_PREFIX:-k8s-}
+    default_gpu_node_prefix=${BOOTSTRAP_ANSIBLE_DEFAULT_GPU_HOSTNAME_PREFIX:-k8s-}
     {
         printf -- "---\n"
         printf "kubernetes:\n"
@@ -414,9 +430,11 @@ generate_ansible_hosts() {
         printf "      hosts:\n"
         master_node_count=0
         worker_node_count=0
+        gpu_node_count=0
         for var in "${!BOOTSTRAP_ANSIBLE_HOST_ADDR_@}"; do
             node_id=$(echo "${var}" | awk -F"_" '{print $5}')
             node_control="BOOTSTRAP_ANSIBLE_CONTROL_NODE_${node_id}"
+            node_gpu="BOOTSTRAP_ANSIBLE_GPU_NODE_${node_id}"
             if [[ "${!node_control}" == "true" ]]; then
                 master_node_count=$((master_node_count+1))
                 node_hostname="BOOTSTRAP_ANSIBLE_HOSTNAME_${node_id}"
@@ -428,6 +446,8 @@ generate_ansible_hosts() {
                 fi
                 printf "        %s:\n" "${node_hostname}"
                 printf "          ansible_host: %s\n" "${!var}"
+            elif [[ "${!node_gpu}" == "true" ]]; then
+                gpu_node_count=$((gpu_node_count+1))
             else
                 worker_node_count=$((worker_node_count+1))
             fi
@@ -438,11 +458,32 @@ generate_ansible_hosts() {
             for var in "${!BOOTSTRAP_ANSIBLE_HOST_ADDR_@}"; do
                 node_id=$(echo "${var}" | awk -F"_" '{print $5}')
                 node_control="BOOTSTRAP_ANSIBLE_CONTROL_NODE_${node_id}"
-                if [[ "${!node_control}" == "false" ]]; then
+                node_gpu="BOOTSTRAP_ANSIBLE_GPU_NODE_${node_id}"
+                if [[ "${!node_control}" == "false" ]] && [[ "${!node_gpu}" == "false" ]]; then
                     node_hostname="BOOTSTRAP_ANSIBLE_HOSTNAME_${node_id}"
                     host_key="${!node_hostname:-${default_worker_node_prefix}}"
                     if [ "${host_key}" == "${default_worker_node_prefix}" ]; then
                         node_hostname=${default_worker_node_prefix}${node_id}
+                    else
+                        node_hostname=${!node_hostname}
+                    fi
+                    printf "        %s:\n" "${node_hostname}"
+                    printf "          ansible_host: %s\n" "${!var}"
+                fi
+            done
+        fi
+        if [[ ${gpu_node_count} -gt 0 ]]; then
+            printf "    gpu:\n"
+            printf "      hosts:\n"
+            for var in "${!BOOTSTRAP_ANSIBLE_HOST_ADDR_@}"; do
+                node_id=$(echo "${var}" | awk -F"_" '{print $5}')
+                node_control="BOOTSTRAP_ANSIBLE_CONTROL_NODE_${node_id}"
+                node_gpu="BOOTSTRAP_ANSIBLE_GPU_NODE_${node_id}"
+                if [[ "${!node_control}" == "false" ]] && [[ "${!node_gpu}" == "true" ]]; then
+                    node_hostname="BOOTSTRAP_ANSIBLE_HOSTNAME_${node_id}"
+                    host_key="${!node_hostname:-${default_gpu_node_prefix}}"
+                    if [ "${host_key}" == "${default_gpu_node_prefix}" ]; then
+                        node_hostname=${default_gpu_node_prefix}${node_id}
                     else
                         node_hostname=${!node_hostname}
                     fi
