@@ -5,12 +5,10 @@ metadata:
   name: home-kubernetes
   namespace: flux-system
 spec:
-  interval: 10m
-  url: ssh://git@github.com/Unitil/home-ops
+  interval: 30m
   ref:
     branch: main
-  secretRef:
-    name: github-deploy-key
+  url: "https://github.com/Unitil/home-ops"
   ignore: |
     # exclude all
     /*
