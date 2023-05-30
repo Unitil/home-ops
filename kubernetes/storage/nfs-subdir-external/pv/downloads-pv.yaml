@@ -1,0 +1,25 @@
+---
+apiVersion: helm.toolkit.fluxcd.io/v2beta1
+kind: PersistentVolume
+metadata:
+  name: downloads-pv
+spec:
+  capacity:
+    storage: 10Mi
+  volumeMode: Filesystem
+  accessModes:
+    - ReadWriteMany
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: standard
+  mountOptions:
+    - hard
+    - nfsvers=4.1
+  nfs:
+    path:
+      secretKeyRef:
+        name: nfs-secrets
+        key: downloads
+    server:
+      secretKeyRef:
+        name: nfs-secrets
+        key: ipaddress
